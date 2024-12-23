@@ -1,5 +1,6 @@
 pyautogui
 pygetwindow
 pyperclip
-PyQt5
+keyboard
 watchdog
+PyQt5
