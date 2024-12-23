@@ -5,13 +5,13 @@ import json
 import pygetwindow as gw
 import pyperclip
 import time
+import keyboard  # Import de la bibliothèque pour gérer le Caps Lock
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 from PyQt5.QtWidgets import (
-    QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, QWidget, QPushButton, QLabel, QListWidget
+    QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, QWidget, QPushButton, QLabel, QListWidget, QDialog, QLineEdit, QFormLayout, QDialogButtonBox
 )
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
-
 
 class DirectoryWatcher(QThread):
     directory_changed = pyqtSignal()
@@ -39,20 +39,73 @@ class DirectoryWatcher(QThread):
         self.observer.join()
 
 
+class EditBubbleRNGDialog(QDialog):
+    def __init__(self):
+        super().__init__()
+
+        self.setWindowTitle("Edit Bubble RNG")
+        self.setGeometry(100, 100, 300, 150)
+
+        self.layout = QFormLayout(self)
+        self.x_input = QLineEdit(self)
+        self.y_input = QLineEdit(self)
+        self.layout.addRow("X Value:", self.x_input)
+        self.layout.addRow("Y Value:", self.y_input)
+
+        self.buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        self.buttons.accepted.connect(self.accept)
+        self.buttons.rejected.connect(self.reject)
+        self.layout.addWidget(self.buttons)
+
+    def get_values(self):
+        return self.x_input.text(), self.y_input.text()
+
+
+class BubbleRNGPage(QWidget):
+    def __init__(self):
+        super().__init__()
+
+        self.setGeometry(1700, 20, 200, 40)  # Positionné en haut à droite
+        self.setWindowTitle("Bubble RNG")
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)  # Reste toujours en haut
+        
+        self.setStyleSheet(""" 
+            color: rgb(0, 194, 188);
+            background-color: #333333;
+            font-size: 25px;
+            border: 1px solid #444444;
+            border-radius:  0px;  # Coins arrondis
+            padding: 2px 4px;
+        """)
+        self.label = QLabel("Bubble RNG: X = ? | Y = ?", self)
+        self.label.setAlignment(Qt.AlignCenter)
+        self.label.setGeometry(0, 0, 200, 40)
+        # Appliquer des coins arrondis également au label
+        self.label.setStyleSheet(""" 
+            background-color: #333333;
+            color: rgb(0, 194, 188);
+            font-size: 14px;
+            border-radius: 0px;
+        """)
+
+    def update_values(self, x, y):
+        self.label.setText(f"Bubble RNG: X = {x} | Y = {y}")
+
+
 class CustomWindow(QMainWindow):
-    SETTINGS_FILE = "settings.json"
+    SETTINGS_FILE = ""
 
     def __init__(self):
         super().__init__()
 
         self.load_settings()
 
-        self.setWindowTitle("Wonder - TAS GUI")
+        self.setWindowTitle("")
         self.setWindowOpacity(1)
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
 
-        self.setGeometry(30, 580, 400, 300)
+        self.setGeometry(15, 555, 400, 100)
         self.setStyleSheet("""
             QMainWindow {
                 background-color: rgba(18, 18, 18, 200);
@@ -130,6 +183,14 @@ class CustomWindow(QMainWindow):
         self.directory_watcher.directory_changed.connect(self.refresh_scripts_list)
         self.directory_watcher.start()
 
+        # Variables pour Bubble RNG
+        self.x_value = None
+        self.y_value = None
+
+        # Bubble RNG Page (visible tout le temps)
+        self.bubble_rng_page = BubbleRNGPage()
+        self.bubble_rng_page.show()
+
     def add_header(self, layout):
         header_container = QWidget()
         header_layout = QHBoxLayout()
@@ -189,8 +250,14 @@ class CustomWindow(QMainWindow):
         current_frame_button.setStyleSheet(self.button_style("#FF6600"))
         current_frame_button.clicked.connect(self.show_previous_lines)
         frames_buttons_layout.addWidget(current_frame_button)
-
         buttons_layout.addWidget(frames_buttons_row)
+
+        # Ajouter le bouton "Edit Bubble RNG" sous les autres boutons
+        edit_rng_button = QPushButton("Edit Bubble RNG")
+        edit_rng_button.setStyleSheet("background-color: rgb(0, 194, 188); color: #E5E5E5; font-size: 14px; font-weight: normal; border: 1px solid #444444; border-radius: 5px; padding: 8px 16px;")
+        edit_rng_button.clicked.connect(self.open_rng_dialog)
+        buttons_layout.addWidget(edit_rng_button)
+
 
         layout.addWidget(buttons_container)
 
@@ -233,7 +300,7 @@ class CustomWindow(QMainWindow):
         QPushButton:pressed {{
             background-color: #555555;
         }}
-    """
+    """ 
 
     def load_settings(self):
         if os.path.exists(self.SETTINGS_FILE):
@@ -279,6 +346,7 @@ class CustomWindow(QMainWindow):
         self.execute_cmd_command("a 15")
 
     def execute_cmd_command(self, command):
+        
         cmd_window = None
         for window in gw.getWindowsWithTitle("C:\\Windows\\system32\\cmd.exe"):
             cmd_window = window
@@ -320,9 +388,22 @@ class CustomWindow(QMainWindow):
     def get_output_text(self):
         return pyperclip.paste()
 
-    def closeEvent(self, event):
-        self.directory_watcher.stop()
-        super().closeEvent(event)
+    def open_rng_dialog(self):
+        dialog = EditBubbleRNGDialog()
+        if dialog.exec_() == QDialog.Accepted:
+            x_value, y_value = dialog.get_values()
+            try:
+                # Essayer de convertir les valeurs en float
+                x_value = int(x_value)
+                y_value = float(y_value)
+                self.x_value = x_value
+                self.y_value = y_value
+                self.bubble_rng_page.update_values(self.x_value, self.y_value)
+                
+                # Exécuter la commande "bubbleRNG X Y" dans CMD
+                self.execute_cmd_command(f"bubbleRNG {x_value} {y_value}")
+            except ValueError:
+                self.current_frame_output.setText("Invalid values entered")
 
 
 if __name__ == "__main__":
