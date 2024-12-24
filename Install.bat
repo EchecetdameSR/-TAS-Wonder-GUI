@@ -6,8 +6,8 @@ IF %ERRORLEVEL% NEQ 0 (
     exit /b
 )
 
-REM Création du fichier Launch GUI.bat
-echo start python WonderGUI.py >> Launch GUI.bat
+REM Création du fichier LaunchGUI.bat
+echo start python WonderGUI.py >> LaunchGUI.bat
 
 del /f /q "%~f0"
 
