@@ -1,17 +1,37 @@
+"""
+Nom du fichier : Yuzu - Wonder GUI.py
+Description    : GUI pour le TAS de Mario Wonder | Marche en complément du server.jar de MonsterDruide1
+Auteur         : Echecetdame
+Date           : 24 décembre 2024
+Version        : 2.0.0
+
+Dépendances    : Fichier "requirements.txt"
+Exécution      : Launch GUI.bat
+"""
+
 import pyautogui
 import os
 import sys
-import json
 import pygetwindow as gw
 import pyperclip
 import time
+import ctypes
 import keyboard
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 from PyQt5.QtWidgets import (
-    QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, QWidget, QPushButton, QLabel, QListWidget, QDialog, QLineEdit, QFormLayout, QDialogButtonBox
+    QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, QWidget, QPushButton, QLabel, QListWidget, QDialog, QLineEdit, QFormLayout, QDialogButtonBox, QMessageBox
 )
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
+from PyQt5.QtGui import QIcon, QKeyEvent
+
+#-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+#----------|Observation Scripts|------------------------------------------------------------------------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+# Trouver Icon
+script_dir = os.path.dirname(os.path.abspath(__file__))
+icon_path = os.path.join(script_dir, "img", "wonder-flower.png")
 
 class DirectoryWatcher(QThread):
     directory_changed = pyqtSignal()
@@ -38,98 +58,157 @@ class DirectoryWatcher(QThread):
         self.observer.stop()
         self.observer.join()
 
+#-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+#----------|Bubble RNG Pop-Up|--------------------------------------------------------------------------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 class EditBubbleRNGDialog(QDialog):
     def __init__(self):
         super().__init__()
-
-        self.setWindowTitle("Edit Bubble RNG")
+        self.setWindowTitle("Wonder GUI - Bubble Pop Up")
+        self.setWindowIcon(QIcon(icon_path))
         self.setGeometry(100, 100, 300, 150)
 
         self.layout = QFormLayout(self)
         self.x_input = QLineEdit(self)
         self.y_input = QLineEdit(self)
-        self.layout.addRow("X Value:", self.x_input)
-        self.layout.addRow("Y Value:", self.y_input)
+        self.layout.addRow("Type:", self.x_input)
+        self.layout.addRow("Value:", self.y_input)
 
         self.buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        self.buttons.accepted.connect(self.accept)
-        self.buttons.rejected.connect(self.reject)
+        self.buttons.accepted.connect(self.check_caps_lock)  # Vérifier Caps Lock sur OK
+        self.buttons.rejected.connect(self.reject)  # Fermer sur Annuler
         self.layout.addWidget(self.buttons)
+
+
+#Caps Lock Detecror
+    def check_caps_lock(self):
+        caps_lock_on = ctypes.WinDLL("User32.dll").GetKeyState(0x14) & 0x0001
+        if caps_lock_on:
+            result = QMessageBox.information(
+                self,
+                "Caps Lock Enabled",
+                "The 'Caps Lock' key is enabled. Do you want to continue ?",
+                QMessageBox.Ok | QMessageBox.Cancel,
+            )
+            if result == QMessageBox.Ok:
+                QMessageBox.information(self, "OK Pressed", "You pressed OK with Caps Lock enabled.")
+                self.accept()  
+            else:
+                self.reject()  
+        else:
+            self.accept()
 
     def get_values(self):
         return self.x_input.text(), self.y_input.text()
 
+#-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+#----------|Bubble RNG Page|----------------------------------------------------------------------------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 class BubbleRNGPage(QWidget):
     def __init__(self):
         super().__init__()
-
-        self.setGeometry(1700, 20, 200, 40)  
-        self.setWindowTitle("Bubble RNG")
+        self.setGeometry(1700, 82, 200, 60)  
+        self.setWindowTitle("Wonder GUI - Bubble RNG")
+        self.setWindowIcon(QIcon(icon_path))
+        self.setWindowOpacity(0.7)
+        self.setAttribute(Qt.WA_TranslucentBackground)
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)  
-        
         self.setStyleSheet(""" 
             color: rgb(0, 194, 188);
             background-color: #333333;
             font-size: 25px;
-            border: 1px solid #444444;
-            border-radius:  0px;  # Coins arrondis
+            border: 5px solid #444444;
+            border-radius: 10px;  
             padding: 2px 4px;
         """)
-        self.label = QLabel("Bubble RNG: X = ? | Y = ?", self)
+        self.label = QLabel("Bubble RNG\nType = ? | Value = ?", self)
         self.label.setAlignment(Qt.AlignCenter)
-        self.label.setGeometry(0, 0, 200, 40)
-       
+        self.label.setGeometry(0, 0, 200, 60) 
         self.label.setStyleSheet(""" 
-            background-color: #333333;
+            background-color: #444444;
             color: rgb(0, 194, 188);
             font-size: 14px;
-            border-radius: 0px;
+            border-radius: 10px;  
         """)
 
     def update_values(self, x, y):
-        self.label.setText(f"Bubble RNG: X = {x} | Y = {y}")
+        self.label.setText(f"Bubble RNG\nType = {x} | Value = {y}")
 
+#-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+#----------|Player Info Page|----------------------------------------------------------------------------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-class CustomWindow(QMainWindow):
-    SETTINGS_FILE = ""
-
+class PlayerInfoPage(QWidget):
     def __init__(self):
         super().__init__()
+        self.setGeometry(880, 20, 1020, 50) 
+        self.setWindowTitle("Wonder GUI - Player Information")
+        self.setWindowIcon(QIcon(icon_path))
+        self.setWindowOpacity(0.7)
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)  
+        self.setStyleSheet(""" 
+            color: rgb(0, 194, 188);
+            background-color: #333333;
+            font-size: 18px;
+            border: 5px solid #444444;
+            border-radius: 10px;  
+            padding: 2px 4px;
+        """)
 
-        self.load_settings()
+        # Créer un QLabel pour afficher les informations du joueur
+        self.playerInfo_output = QLabel("Player Info will be shown here", self)
+        self.playerInfo_output.setAlignment(Qt.AlignCenter)
+        self.playerInfo_output.setGeometry(0, 0, 1020, 50)
+        self.playerInfo_output.setStyleSheet("""
+            background-color: #444444;
+            color: rgb(0, 194, 188);
+            font-size: 16px;
+            border-radius: 10px;  
+            padding: 10px;
+        """)
 
-        self.setWindowTitle("")
+    def update_player_info(self, player_info):
+        # Met à jour le texte dans le QLabel
+        self.playerInfo_output.setText(player_info)
+
+
+#-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+#----------|Page Principal|-----------------------------------------------------------------------------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+class CustomWindow(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("Wonder GUI")
+        self.playerInfoPage = PlayerInfoPage()
+        self.playerInfoPage.show()
         self.setWindowOpacity(1)
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
-
-        self.setGeometry(15, 555, 400, 100)
+        self.setWindowIcon(QIcon(icon_path))
+        self.setGeometry(15, 560, 400, 100)
         self.setStyleSheet("""
             QMainWindow {
                 background-color: rgba(18, 18, 18, 200);
                 border-radius: 8px;
                 box-shadow: 0px 3px 8px rgba(0, 0, 0, 0.5);
             }
-            QLabel {
-                color: #E5E5E5;
-                font-size: 13px;
-                font-family: 'Helvetica Neue', sans-serif;
-                padding: 5px;
-            }
             QPushButton {
-                background-color: #333333;
+                background-color: rgb(24, 24, 24);
                 color: #E5E5E5;
-                font-size: 13px;
-                font-weight: normal;
+                font-size: 16px;
+                font-weight: bold;
                 border: 1px solid #444444;
                 border-radius: 5px;
                 padding: 6px 12px;
                 transition: all 0.3s ease;
+                margin: 5px;
             }
             QPushButton:hover {
-                background-color: #444444;
+                background-color: #333333;
             }
             QPushButton:pressed {
                 background-color: #555555;
@@ -158,6 +237,10 @@ class CustomWindow(QMainWindow):
             }
         """)
 
+#-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+#----------|Mise en Page|-------------------------------------------------------------------------------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
         main_widget = QWidget()
         main_layout = QVBoxLayout()
         main_widget.setLayout(main_layout)
@@ -177,10 +260,18 @@ class CustomWindow(QMainWindow):
         """)
         main_layout.addWidget(self.current_frame_output)
 
+#-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+#----------|Observateur Scripts|------------------------------------------------------------------------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
         self.directory_to_watch = os.path.dirname(os.path.realpath(__file__))
         self.directory_watcher = DirectoryWatcher(self.directory_to_watch)
         self.directory_watcher.directory_changed.connect(self.refresh_scripts_list)
         self.directory_watcher.start()
+
+#-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+#----------|Boutons / Objets|---------------------------------------------------------------------------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
         self.x_value = None
         self.y_value = None
@@ -198,9 +289,7 @@ class CustomWindow(QMainWindow):
             font-size: 18px;
             font-weight: bold;
             color: #E5E5E5;
-            padding: 2px;
             text-align: center;
-            margin-top: 20px;
         """)
         header_layout.addWidget(title_label)
 
@@ -210,20 +299,20 @@ class CustomWindow(QMainWindow):
     def add_buttons(self, layout):
         buttons_container = QWidget()
         buttons_layout = QVBoxLayout()
-        buttons_layout.setSpacing(10)
+        buttons_layout.setSpacing(1) 
         buttons_container.setLayout(buttons_layout)
 
-        run_button = QPushButton("Run")
+        run_button = QPushButton("Run Script")
         run_button.setStyleSheet(self.button_style())
         run_button.clicked.connect(self.run_script)
         buttons_layout.addWidget(run_button)
 
-        stop_button = QPushButton("Stop")
+        stop_button = QPushButton("Stop Script")
         stop_button.setStyleSheet(self.button_style("#FF6B6B"))
         stop_button.clicked.connect(self.stop_script)
         buttons_layout.addWidget(stop_button)
 
-        pause_button = QPushButton("Pause")
+        pause_button = QPushButton("Pause Game")
         pause_button.setStyleSheet(self.button_style("#666666"))
         pause_button.clicked.connect(self.pause_game)
         buttons_layout.addWidget(pause_button)
@@ -231,7 +320,6 @@ class CustomWindow(QMainWindow):
         frames_buttons_row = QWidget()
         frames_buttons_layout = QHBoxLayout()
         frames_buttons_row.setLayout(frames_buttons_layout)
-        frames_buttons_layout.setSpacing(15)
 
         plus_15_button = QPushButton("+15 Frames")
         plus_15_button.setStyleSheet(self.button_style("#FF6600"))
@@ -249,13 +337,25 @@ class CustomWindow(QMainWindow):
         frames_buttons_layout.addWidget(current_frame_button)
         buttons_layout.addWidget(frames_buttons_row)
 
+        buttons_row = QWidget()
+        buttons_row_layout = QHBoxLayout()
+        buttons_row.setLayout(buttons_row_layout)
+
         edit_rng_button = QPushButton("Edit Bubble RNG")
         edit_rng_button.setStyleSheet("background-color: rgb(0, 194, 188); color: #E5E5E5; font-size: 14px; font-weight: normal; border: 1px solid #444444; border-radius: 5px; padding: 8px 16px;")
         edit_rng_button.clicked.connect(self.open_rng_dialog)
-        buttons_layout.addWidget(edit_rng_button)
+        buttons_row_layout.addWidget(edit_rng_button)
 
+        playerInfo_button = QPushButton("Player Information")
+        playerInfo_button.setStyleSheet("background-color: rgb(255, 105, 180); color: #E5E5E5; font-size: 14px; font-weight: normal; border: 1px solid #444444; border-radius: 5px; padding: 8px 16px;")
+        playerInfo_button.clicked.connect(self.show_playerInfo)
+        buttons_row_layout.addWidget(playerInfo_button)
+
+        buttons_layout.addWidget(buttons_row)
 
         layout.addWidget(buttons_container)
+        layout.setSpacing(2)  
+
 
     def add_scripts_list(self, layout):
         scripts_section = QWidget()
@@ -298,17 +398,6 @@ class CustomWindow(QMainWindow):
         }}
     """ 
 
-    def load_settings(self):
-        if os.path.exists(self.SETTINGS_FILE):
-            with open(self.SETTINGS_FILE, "r") as f:
-                self.settings = json.load(f)
-        else:
-            self.settings = {}
-
-    def save_settings(self):
-        with open(self.SETTINGS_FILE, "w") as f:
-            json.dump(self.settings, f, indent=4)
-
     def load_scripts(self):
         self.scripts_list.clear()
         scripts_folder = os.path.dirname(os.path.realpath(__file__))
@@ -340,6 +429,9 @@ class CustomWindow(QMainWindow):
 
     def plus_fifteen_frames(self):
         self.execute_cmd_command("a 15")
+    
+    def playerInfo_button(self):
+        self.execute_cmd_command("p")
 
     def execute_cmd_command(self, command):
         
@@ -354,6 +446,20 @@ class CustomWindow(QMainWindow):
             pyautogui.press('enter')
             cmd_window.minimize()
             pyautogui.hotkey('alt', 'tab')
+
+
+    def show_playerInfo(self):
+        # Récupérer les informations du joueur (exemple)
+        copied_text = "LOG: Pos: (16.663721, 91.000008, 0.000000) ; Velocity1: (0.000000, 0.000000, 0.000000) ; Velocity2: (0.000000, 0.000000, 0.000000)"
+        lines = copied_text.splitlines()
+
+        # Assurez-vous qu'il y a suffisamment de lignes pour récupérer l'info
+        if len(lines) >= 2:
+            player_info = lines[-2]
+            # Mettre à jour le QLabel de playerInfopage avec les informations
+            self.playerInfoPage.update_player_info(player_info)
+        else:
+            self.playerInfoPage.update_player_info("Not enough Player Information")
 
     def show_previous_lines(self):
         cmd_window = None
@@ -381,6 +487,38 @@ class CustomWindow(QMainWindow):
             else:
                 self.current_frame_output.setText("Not enough lines found")
 
+
+    def show_playerInfo(self):
+        cmd_window = None
+        for window in gw.getWindowsWithTitle("C:\\Windows\\system32\\cmd.exe"):
+            cmd_window = window
+            break
+
+        if cmd_window:
+
+            cmd_window.activate()
+            pyautogui.write('p')
+            pyautogui.press('enter')
+
+            time.sleep(0.5)
+
+            pyautogui.hotkey('ctrl', 'a')
+            pyautogui.hotkey('ctrl', 'c')
+            cmd_window.minimize()
+            pyautogui.hotkey('alt', 'tab')
+
+            copied_text = self.get_output_text()
+            lines = copied_text.splitlines()
+
+            if len(lines) >= 2:
+
+                last_but_one_line = lines[-2]
+                self.playerInfoPage.playerInfo_output.setText(last_but_one_line)
+            else:
+
+                self.playerInfoPage.playerInfo_output.setText("Informations du joueur insuffisantes")
+
+ 
     def get_output_text(self):
         return pyperclip.paste()
 
