@@ -1,6 +1,0 @@
-pyautogui
-pygetwindow
-pyperclip
-keyboard
-watchdog
-PyQt5
