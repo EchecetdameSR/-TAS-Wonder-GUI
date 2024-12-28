@@ -1,0 +1,7 @@
+pygetwindow
+pyautogui
+PyQt5
+pyperclip
+watchdog
+pexpect
+keyboard
