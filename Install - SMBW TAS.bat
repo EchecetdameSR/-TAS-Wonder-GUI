@@ -20,7 +20,7 @@ rd /s /q "%batch_folder%Install Folder"
 
 :: Définir le chemin relatif vers la cible, le raccourci et l'icône
 set cible=%~dp0py\start.bat
-set raccourci=%~dp0NSMW TAS.lnk
+set raccourci=%~dp0SMBW TAS.lnk
 set icone=%~dp0img\wonder-flower-ico.ico
 set dossier_de_demarrage=%~dp0py
 
